@@ -1,0 +1,14 @@
+rules_version = '2';
+
+// Public, read-only content. Writes only happen through the Admin SDK seeder (which bypasses rules).
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /words/{slug} {
+      allow read: if true;
+      allow write: if false;
+    }
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

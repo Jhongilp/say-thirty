@@ -1,0 +1,14 @@
+rules_version = '2';
+
+// Reference audio is public and immutable; uploads only via the Admin SDK seeder.
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /audio/{file} {
+      allow read: if true;
+      allow write: if false;
+    }
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}
