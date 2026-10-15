@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "
 import { bandPower } from "@/lib/audio-analysis";
 import {
   evaluateAttempt,
+  expectedDurationMs,
   type AcousticFrame,
   type EvaluationResult,
   type EvaluationTarget,
@@ -95,8 +96,8 @@ export function useVoiceEvaluator({
   target,
   frictionBand,
   useSpeech = true,
-  maxDurationMs = 3500,
-  silenceStopMs = 900,
+  maxDurationMs = 2600,
+  silenceStopMs = 450,
   onResult,
 }: VoiceEvaluatorOptions) {
   const [status, setStatus] = useState<RecorderStatus>("idle");
@@ -104,6 +105,7 @@ export function useVoiceEvaluator({
   const [error, setError] = useState<string | null>(null);
 
   const liveLevelsRef = useRef<Float32Array>(new Float32Array(WAVEFORM_BARS));
+  const activeBarRef = useRef<number>(-1);
   const ctxRef = useRef<AudioContext | null>(null);
   const sessionRef = useRef<Session | null>(null);
   const latest = useRef({ target, frictionBand, onResult, maxDurationMs, silenceStopMs });
@@ -137,6 +139,7 @@ export function useVoiceEvaluator({
     const alternatives = [...new Set([...session.finalAlts, ...session.interimAlts])];
     const evaluation = evaluateAttempt(session.frames, alternatives, latest.current.target);
     sessionRef.current = null;
+    activeBarRef.current = -1;
     setResult(evaluation);
     setStatus("done");
     latest.current.onResult?.(evaluation);
@@ -182,6 +185,7 @@ export function useVoiceEvaluator({
     setError(null);
     setResult(null);
     liveLevelsRef.current.fill(0);
+    activeBarRef.current = -1;
 
     if (!navigator.mediaDevices?.getUserMedia) {
       setError("Tu navegador no permite usar el micrófono. Prueba con Chrome, Edge o Safari actualizados (y HTTPS).");
@@ -231,9 +235,12 @@ export function useVoiceEvaluator({
 
       const timeBuf = new Float32Array(analyser.fftSize);
       const freqBuf = new Uint8Array(analyser.frequencyBinCount);
-      const { frictionBand: band, maxDurationMs: maxMs, silenceStopMs: silenceMs } = latest.current;
+      const { frictionBand: band, maxDurationMs: maxMs, silenceStopMs: silenceMs, target: curTarget } = latest.current;
       const midBand: [number, number] = [500, band[0]];
-      const msPerBar = maxMs / WAVEFORM_BARS;
+      // Pace the 48-bar sweep to a single word's expected duration once speech begins,
+      // rather than spreading bars across the entire timeout window.
+      const sweepWindowMs = Math.max(700, Math.round(expectedDurationMs(curTarget.syllables) * 1.35));
+      const msPerBar = sweepWindowMs / WAVEFORM_BARS;
 
       const tick = () => {
         if (session.stopping) return;
@@ -243,23 +250,29 @@ export function useVoiceEvaluator({
         let sum = 0;
         for (let i = 0; i < timeBuf.length; i++) sum += timeBuf[i] * timeBuf[i];
         const rms = Math.sqrt(sum / timeBuf.length);
+        const high = bandPower(freqBuf, ctx.sampleRate, analyser.fftSize, band);
+        const low = bandPower(freqBuf, ctx.sampleRate, analyser.fftSize, LOW_BAND);
+        const mid = bandPower(freqBuf, ctx.sampleRate, analyser.fftSize, midBand);
         session.frames.push({
           t,
           rms,
-          high: bandPower(freqBuf, ctx.sampleRate, analyser.fftSize, band),
-          low: bandPower(freqBuf, ctx.sampleRate, analyser.fftSize, LOW_BAND),
-          mid: bandPower(freqBuf, ctx.sampleRate, analyser.fftSize, midBand),
+          high,
+          low,
+          mid,
         });
 
-        const bar = Math.min(WAVEFORM_BARS - 1, Math.floor(t / msPerBar));
-        liveLevelsRef.current[bar] = Math.max(liveLevelsRef.current[bar], Math.min(1, rms * 6));
-
-        // Simple voice-activity detection for hands-free auto-stop.
-        if (rms > 0.03) {
+        // Voice-activity detection: trigger onset on clear voice RMS or initial /θ/ friction energy.
+        if (rms > 0.018 || high > 5e-7) {
           session.heardVoiceAt ??= t;
           session.lastVoiceAt = t;
         }
-        if (session.heardVoiceAt !== null && t - session.lastVoiceAt > silenceMs && t > 600) {
+        if (session.heardVoiceAt !== null) {
+          const speechElapsed = Math.max(0, t - session.heardVoiceAt);
+          const bar = Math.min(WAVEFORM_BARS - 1, Math.floor(speechElapsed / msPerBar));
+          activeBarRef.current = bar;
+          liveLevelsRef.current[bar] = Math.max(liveLevelsRef.current[bar], Math.min(1, rms * 6));
+        }
+        if (session.heardVoiceAt !== null && t - session.lastVoiceAt > silenceMs && t - session.heardVoiceAt > 260) {
           void finish();
           return;
         }
@@ -291,6 +304,7 @@ export function useVoiceEvaluator({
     setError(null);
     setStatus("idle");
     liveLevelsRef.current.fill(0);
+    activeBarRef.current = -1;
   }, []);
 
   useEffect(() => {
@@ -307,5 +321,5 @@ export function useVoiceEvaluator({
     };
   }, [teardown]);
 
-  return { status, result, error, start, stop, reset, liveLevelsRef };
+  return { status, result, error, start, stop, reset, liveLevelsRef, activeBarRef };
 }

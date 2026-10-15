@@ -129,6 +129,22 @@ describe("analyzeAcoustics (Engine B)", () => {
     assert.equal(r.speechDetected, false);
     assert.deepEqual(r.issues, ["no-speech"]);
   });
+
+  it("ignores a trailing button click or breath separated by silence from the word", () => {
+    const withTrailingClick = frames([
+      { ms: 240, ...SILENCE },
+      { ms: 112, ...FRICATIVE },
+      { ms: 320, ...VOWEL },
+      { ms: 160, ...WEAK_VOWEL },
+      { ms: 700, ...SILENCE },
+      { ms: 48, rms: 0.12, high: 1e-8, low: 1e-5, mid: 1e-6 }, // trailing click
+      { ms: 160, ...SILENCE },
+    ]);
+    const r = analyzeAcoustics(withTrailingClick, targetFor("thirty"));
+    assert.equal(r.speechDetected, true);
+    assert.ok(r.durationMs < 650, `durationMs=${r.durationMs} should not include the 700ms silence + click`);
+    assert.ok(r.score >= 80, `score=${r.score}`);
+  });
 });
 
 describe("evaluateSpeech (Engine A)", () => {

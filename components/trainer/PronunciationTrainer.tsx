@@ -69,7 +69,7 @@ export default function PronunciationTrainer({ word, nextWord }: PronunciationTr
     }
   };
 
-  const { status, result, error, start, stop, reset, liveLevelsRef } = useVoiceEvaluator({
+  const { status, result, error, start, stop, reset, liveLevelsRef, activeBarRef } = useVoiceEvaluator({
     target,
     frictionBand: word.targetFrequencyHz,
     onResult: handleResult,
@@ -226,8 +226,11 @@ export default function PronunciationTrainer({ word, nextWord }: PronunciationTr
           <div className="flex flex-col gap-4">
             <WaveformCanvas
               reference={word.referenceWaveform}
+              chunks={word.chunks}
+              word={word.word}
               userWaveform={result?.acoustic.userWaveform ?? null}
               liveLevelsRef={liveLevelsRef}
+              activeBarRef={activeBarRef}
               recording={recording}
             />
 

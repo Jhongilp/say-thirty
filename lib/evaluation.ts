@@ -80,6 +80,8 @@ export const ACOUSTIC_CONFIG = {
   plosiveRiseMs: 34,
   closureMinMs: 45,
   closureLevel: 0.12,
+  /** Max silent gap inside a single word before a later sound is treated as a separate noise/click. */
+  maxInternalSilenceMs: 260,
 } as const;
 
 /* ------------------------------------------------------------------ */
@@ -170,15 +172,37 @@ export function analyzeAcoustics(frames: AcousticFrame[], target: EvaluationTarg
   if (peak < cfg.minPeakRms) return empty;
 
   const threshold = Math.max(noiseRms * cfg.noiseMultiplier, peak * cfg.peakRatio, cfg.minPeakRms * 0.5);
-  let startIdx = -1;
-  let endIdx = -1;
+  // Group contiguous active regions bridged across brief internal dips (consonant closures <= maxInternalSilenceMs)
+  // and pick the highest-energy speech island so a trailing button click or breath never stretches the word.
+  const islands: Array<{ start: number; end: number; energy: number }> = [];
+  let curStart = -1;
+  let curEnd = -1;
+  let curEnergy = 0;
+  let silentMs = 0;
   levels.forEach((lvl, i) => {
+    const dt = frameDuration(frames, i);
     if (lvl >= threshold) {
-      if (startIdx === -1) startIdx = i;
-      endIdx = i;
+      if (curStart === -1) curStart = i;
+      curEnd = i;
+      curEnergy += lvl * dt;
+      silentMs = 0;
+    } else if (curStart !== -1) {
+      silentMs += dt;
+      if (silentMs > cfg.maxInternalSilenceMs) {
+        islands.push({ start: curStart, end: curEnd, energy: curEnergy });
+        curStart = -1;
+        curEnd = -1;
+        curEnergy = 0;
+        silentMs = 0;
+      }
     }
   });
-  if (startIdx === -1) return empty;
+  if (curStart !== -1) islands.push({ start: curStart, end: curEnd, energy: curEnergy });
+  if (!islands.length) return empty;
+
+  const mainIsland = islands.reduce((best, cur) => (cur.energy > best.energy ? cur : best));
+  const startIdx = mainIsland.start;
+  const endIdx = mainIsland.end;
 
   const startT = frames[startIdx].t;
   const endT = frames[endIdx].t + frameDuration(frames, endIdx);
