@@ -62,7 +62,12 @@ tests/                     Unit tests
 
   This engine works alone on iOS Safari and in-app browsers.
 - **Combined score:** 60% speech + 40% acoustic when both engines are available. A detected trap caps the score
-  at 55. Passing is ≥ 80%, which records mastery, fires confetti and shows the next-word CTA.
+  at 55. Passing is ≥ 80%, which records mastery and shows the next-word CTA. Scores are estimates, not
+  certification of pronunciation quality.
+- **Recognition celebration:** a small confetti burst celebrates a final first-choice transcript matching the
+  whole target or an accepted equivalent (such as "30"), regardless of score. It fires once per word per trainer
+  visit and respects reduced motion. Retries still show the recognition message and a separate practice tip.
+  Lower-ranked matches, trap-first results, interim-only transcripts and acoustic-only attempts do not trigger it.
 
 Detector thresholds live in `ACOUSTIC_CONFIG` in [lib/evaluation.ts](./lib/evaluation.ts). They were validated
 with synthetic signals (unit tests plus an in-browser synthetic microphone). Tune them with real recordings before

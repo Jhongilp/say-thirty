@@ -13,13 +13,19 @@ const ENGINE_LABEL: Record<EvaluationResult["engine"], string> = {
 };
 
 /** Circular 0–100 % score plus the phonetic-trap diagnosis and an actionable tip in Spanish. */
-export default function FeedbackBadge({ result }: { result: EvaluationResult }) {
+export default function FeedbackBadge({ result, word }: { result: EvaluationResult; word: string }) {
   const { score, headlineEs, tipEs, errorType, heard, engine, acoustic } = result;
   const colors = scoreColor(score);
   const circumference = 2 * Math.PI * 34;
 
   return (
     <div className={`animate-pop-in rounded-2xl border p-4 sm:p-5 ${colors.bg}`} aria-live="polite">
+      {result.wordRecognized && (
+        <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-emerald-900">
+          <p className="text-lg font-bold">¡Te entendimos! Dijiste «{word}».</p>
+          <p className="mt-1 text-sm">Lograste comunicar la palabra. Ahora puedes seguir afinando el sonido.</p>
+        </div>
+      )}
       <div className="flex items-center gap-4">
         <div className="relative size-20 shrink-0">
           <svg viewBox="0 0 80 80" className="size-20 -rotate-90" aria-hidden="true">
@@ -38,10 +44,11 @@ export default function FeedbackBadge({ result }: { result: EvaluationResult }) 
             />
           </svg>
           <span className="absolute inset-0 grid place-items-center text-lg font-bold text-slate-900">
-            {score}%<span className="sr-only"> de precisión</span>
+            {score}%<span className="sr-only">, estimación orientativa</span>
           </span>
         </div>
         <div className="min-w-0">
+          <p className="mb-1 text-xs text-slate-500">Estimación orientativa · No es una certificación</p>
           <p className={`text-lg font-bold leading-tight ${colors.text}`}>{headlineEs}</p>
           {errorType && (
             <span className="mt-1 inline-block rounded-full bg-white/80 px-2.5 py-0.5 text-xs font-medium text-slate-700 ring-1 ring-slate-200">

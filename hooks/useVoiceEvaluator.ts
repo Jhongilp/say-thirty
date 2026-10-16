@@ -137,7 +137,7 @@ export function useVoiceEvaluator({
     session.recognition?.abort();
 
     const alternatives = [...new Set([...session.finalAlts, ...session.interimAlts])];
-    const evaluation = evaluateAttempt(session.frames, alternatives, latest.current.target);
+    const evaluation = evaluateAttempt(session.frames, alternatives, latest.current.target, session.finalAlts.length > 0);
     sessionRef.current = null;
     activeBarRef.current = -1;
     setResult(evaluation);

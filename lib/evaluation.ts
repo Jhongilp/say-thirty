@@ -52,6 +52,7 @@ export interface SpeechResult {
 export interface EvaluationResult {
   score: number;
   passed: boolean;
+  wordRecognized: boolean;
   engine: "dual" | "acoustic" | "speech";
   headlineEs: string;
   tipEs: string;
@@ -391,6 +392,7 @@ export function combineEvaluation(
   speech: SpeechResult,
   acoustic: AcousticResult,
   target: EvaluationTarget,
+  speechIsFinal = true,
 ): EvaluationResult {
   const speechUsable = speech.kind !== "none";
   let engine: EvaluationResult["engine"];
@@ -412,7 +414,11 @@ export function combineEvaluation(
 
   const passed = score >= PASS_SCORE;
   const firstIssue = ISSUE_PRIORITY.find((i) => acoustic.issues.includes(i));
-  const base = { score, passed, engine, acoustic, speech, heard: speech.heard };
+  const wordRecognized = speechIsFinal && speech.kind === "match" && speech.rank === 0 && speech.trap === null &&
+    [target.word, ...(target.acceptedTranscripts ?? [])].some(
+      (word) => normalizeTranscript(word) === normalizeTranscript(speech.heard ?? ""),
+    );
+  const base = { score, passed, wordRecognized, engine, acoustic, speech, heard: speech.heard };
 
   if (!speechUsable && !acoustic.speechDetected) {
     const t = acousticTip("no-speech", target);
@@ -429,7 +435,7 @@ export function combineEvaluation(
   if (passed) {
     return {
       ...base,
-      headlineEs: score >= 92 ? "¡Pronunciación nativa!" : "¡Muy bien! La TH suena clara",
+      headlineEs: "¡Buen intento! Sigue practicando la TH",
       tipEs: target.anatomicalTipEs,
       errorType: null,
     };
@@ -458,6 +464,7 @@ export function evaluateAttempt(
   frames: AcousticFrame[],
   alternatives: string[],
   target: EvaluationTarget,
+  speechIsFinal = true,
 ): EvaluationResult {
-  return combineEvaluation(evaluateSpeech(alternatives, target), analyzeAcoustics(frames, target), target);
+  return combineEvaluation(evaluateSpeech(alternatives, target), analyzeAcoustics(frames, target), target, speechIsFinal);
 }

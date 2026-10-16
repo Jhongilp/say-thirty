@@ -180,6 +180,35 @@ describe("evaluateSpeech (Engine A)", () => {
 
 describe("combined scoring", () => {
   const t = targetFor("thirty");
+  it("recognizes a first-choice word at 78 without awarding score-based mastery", () => {
+    const acoustic = { ...analyzeAcoustics(goodThirty, t), score: 45 };
+    const r = combineEvaluation(evaluateSpeech(["Thirty."], t), acoustic, t);
+    assert.equal(r.score, 78);
+    assert.equal(r.wordRecognized, true);
+    assert.equal(r.passed, false);
+    assert.equal(r.tipEs, t.anatomicalTipEs);
+  });
+  it("recognizes accepted digits and homophones", () => {
+    for (const [slug, transcript] of [["thirty", "30"], ["weather", "whether"], ["through", "threw"]]) {
+      assert.equal(evaluateAttempt(goodThirty, [transcript], targetFor(slug)).wordRecognized, true);
+    }
+  });
+  it("does not celebrate ambiguous, partial, interim-only or missing recognition", () => {
+    for (const alternatives of [["dirty", "thirty"], ["flirty", "thirty"], ["banana"], ["not thirty"], []]) {
+      assert.equal(evaluateAttempt(goodThirty, alternatives, t).wordRecognized, false, alternatives.join(", "));
+    }
+    assert.equal(evaluateAttempt(goodThirty, ["thirty"], t, false).wordRecognized, false);
+  });
+  it("retains corrective advice when a recognized word needs practice", () => {
+    const r = evaluateAttempt(dirty, ["thirty"], t);
+    assert.equal(r.wordRecognized, true);
+    assert.equal(r.passed, false);
+    assert.ok(r.errorType);
+  });
+  it("does not describe high scores as native pronunciation", () => {
+    const r = evaluateAttempt(goodThirty, ["thirty"], t);
+    assert.doesNotMatch(r.headlineEs, /nativa/i);
+  });
   it("passes a correct dual-engine attempt", () => {
     const r = evaluateAttempt(goodThirty, ["thirty"], t);
     assert.equal(r.engine, "dual");

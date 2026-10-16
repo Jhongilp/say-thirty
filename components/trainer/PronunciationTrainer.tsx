@@ -32,7 +32,7 @@ const HOLD_TO_TALK_MS = 450;
 
 async function celebrate() {
   const { default: confetti } = await import("canvas-confetti");
-  confetti({ particleCount: 120, spread: 75, origin: { y: 0.65 }, disableForReducedMotion: true });
+  confetti({ particleCount: 45, spread: 55, origin: { y: 0.65 }, disableForReducedMotion: true });
 }
 
 /** Master interactive client component: the 4-phase above-the-fold trainer. */
@@ -41,6 +41,7 @@ export default function PronunciationTrainer({ word, nextWord }: PronunciationTr
   const [mouthMode, setMouthMode] = useState<"english" | "spanish">("english");
   const [playing, setPlaying] = useState<null | "normal" | "slow">(null);
   const [justMastered, setJustMastered] = useState(false);
+  const celebratedWords = useRef(new Set<string>());
   const pressRef = useRef<{ at: number; startedHere: boolean } | null>(null);
   const speechSupported = useSpeechSupport();
   const { progress, recordAttempt, recordChunk } = useProgressStore();
@@ -65,7 +66,12 @@ export default function PronunciationTrainer({ word, nextWord }: PronunciationTr
     trackEvent("pronunciation_attempt", { word: word.slug, score: result.score, engine: result.engine });
     if (result.passed) {
       setJustMastered(true);
-      void celebrate();
+    }
+    if (result.wordRecognized && !celebratedWords.current.has(word.slug)) {
+      celebratedWords.current.add(word.slug);
+      void celebrate().catch((error: unknown) => {
+        console.error("No se pudo mostrar la celebración de reconocimiento.", error);
+      });
     }
   };
 
@@ -268,7 +274,7 @@ export default function PronunciationTrainer({ word, nextWord }: PronunciationTr
             </div>
 
             {error && <p className="rounded-xl bg-rose-50 p-3 text-sm text-rose-700">{error}</p>}
-            {result && status === "done" && <FeedbackBadge result={result} />}
+            {result && status === "done" && <FeedbackBadge result={result} word={word.word} />}
 
             {result && status === "done" && (
               <div className="flex flex-wrap items-center justify-center gap-2">
