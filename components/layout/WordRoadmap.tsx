@@ -51,9 +51,10 @@ export default function WordRoadmap({ words }: { words: WordNavItem[] }) {
                   <span className="block truncate text-sm text-slate-500">
                     <span className="font-ipa text-indigo-700">{w.ipa}</span> · {w.translationEs}
                   </span>
+                  {p?.guidePracticed && <span className="block text-xs font-semibold text-emerald-700">Guía practicada</span>}
                 </span>
                 <span className="text-right text-xs text-slate-500">
-                  {p ? <strong className="block text-base text-slate-800">{p.bestScore}%</strong> : null}
+                  {p && p.attempts > 0 ? <strong className="block text-base text-slate-800">{p.bestScore}%</strong> : null}
                   {w.difficulty}
                 </span>
               </Link>

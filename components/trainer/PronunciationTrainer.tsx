@@ -2,16 +2,16 @@
 
 import { useMemo, useRef, useState, type KeyboardEvent } from "react";
 import Link from "next/link";
-import { ArrowRight, Ear, Loader2, Mic, RotateCcw, Snail, Square, Trophy, Volume2 } from "lucide-react";
+import { ArrowRight, Ear, Loader2, Mic, RotateCcw, Square, Trophy } from "lucide-react";
 import { useProgressStore } from "@/hooks/useProgressStore";
 import { useSpeechSupport, useVoiceEvaluator } from "@/hooks/useVoiceEvaluator";
 import { trackActiveLearner, trackEvent } from "@/lib/analytics";
-import { playReference } from "@/lib/audio-playback";
+import { getCoachFocus, type CoachFocus } from "@/lib/mouth-coach";
 import type { EvaluationResult, EvaluationTarget } from "@/lib/evaluation";
 import { wordPath } from "@/lib/site";
 import type { WordDocument } from "@/lib/types";
 import FeedbackBadge from "./FeedbackBadge";
-import MouthAnatomySVG from "./MouthAnatomySVG";
+import MouthCoach from "./MouthCoach";
 import ShadowingChallenge from "./ShadowingChallenge";
 import SyllableChunker from "./SyllableChunker";
 import WaveformCanvas from "./WaveformCanvas";
@@ -22,7 +22,7 @@ export interface PronunciationTrainerProps {
 }
 
 const PHASES = [
-  { id: 1, title: "Diagnóstico", subtitle: "Mira y escucha" },
+  { id: 1, title: "Guía de boca", subtitle: "Mira y practica" },
   { id: 2, title: "Espejo acústico", subtitle: "Graba tu voz" },
   { id: 3, title: "Sílabas", subtitle: "Bloque a bloque" },
   { id: 4, title: "Contexto real", subtitle: "Shadowing" },
@@ -38,13 +38,13 @@ async function celebrate() {
 /** Master interactive client component: the 4-phase above-the-fold trainer. */
 export default function PronunciationTrainer({ word, nextWord }: PronunciationTrainerProps) {
   const [phase, setPhase] = useState<1 | 2 | 3 | 4>(1);
-  const [mouthMode, setMouthMode] = useState<"english" | "spanish">("english");
-  const [playing, setPlaying] = useState<null | "normal" | "slow">(null);
+  const [coachFocus, setCoachFocus] = useState<CoachFocus | null>(null);
+  const [difficultAttempts, setDifficultAttempts] = useState(0);
   const [justMastered, setJustMastered] = useState(false);
   const celebratedWords = useRef(new Set<string>());
   const pressRef = useRef<{ at: number; startedHere: boolean } | null>(null);
   const speechSupported = useSpeechSupport();
-  const { progress, recordAttempt, recordChunk } = useProgressStore();
+  const { progress, recordAttempt, recordChunk, recordGuidePractice } = useProgressStore();
   const wordProgress = progress.words[word.slug];
 
   const target = useMemo<EvaluationTarget>(
@@ -64,6 +64,7 @@ export default function PronunciationTrainer({ word, nextWord }: PronunciationTr
     recordAttempt(word.slug, result.score);
     trackActiveLearner(word.slug, result.score);
     trackEvent("pronunciation_attempt", { word: word.slug, score: result.score, engine: result.engine });
+    setDifficultAttempts((count) => result.passed ? 0 : count + 1);
     if (result.passed) {
       setJustMastered(true);
     }
@@ -82,17 +83,6 @@ export default function PronunciationTrainer({ word, nextWord }: PronunciationTr
   });
   const recording = status === "recording";
   const busy = status === "requesting" || status === "analyzing";
-
-  const play = async (rate: 1 | 0.6) => {
-    setPlaying(rate === 1 ? "normal" : "slow");
-    try {
-      await playReference({ text: word.word, normalUrl: word.audioNormalUrl, slowUrl: word.audioSlowUrl, rate });
-    } catch {
-      // Audio unavailable: nothing else to do; the visual guide remains.
-    } finally {
-      setPlaying(null);
-    }
-  };
 
   const onMicPointerDown = () => {
     if (recording) {
@@ -137,13 +127,14 @@ export default function PronunciationTrainer({ word, nextWord }: PronunciationTr
           </p>
           <p className="text-sm text-slate-500">Suena: {word.phoneticRespellingEs}</p>
         </div>
-        {wordProgress && (
+        {wordProgress && wordProgress.attempts > 0 && (
           <div className="flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1.5 text-sm text-slate-700">
             <Trophy className={`size-4 ${mastered ? "text-amber-500" : "text-slate-400"}`} />
             Mejor: <strong>{wordProgress.bestScore}%</strong>
             {mastered && <span className="font-semibold text-emerald-600">· Dominada</span>}
           </div>
         )}
+        {wordProgress?.guidePracticed && <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-800">Guía practicada</span>}
       </div>
 
       {/* Phase stepper */}
@@ -152,7 +143,11 @@ export default function PronunciationTrainer({ word, nextWord }: PronunciationTr
           <button
             key={p.id}
             type="button"
-            onClick={() => setPhase(p.id)}
+            disabled={recording || busy}
+            onClick={() => {
+              if (p.id === 1) setCoachFocus(null);
+              setPhase(p.id);
+            }}
             aria-current={phase === p.id ? "step" : undefined}
             className={`rounded-xl px-2 py-2 text-left transition sm:px-3 ${
               phase === p.id ? "bg-indigo-600 text-white shadow" : "bg-slate-100 text-slate-700 hover:bg-slate-200"
@@ -167,71 +162,15 @@ export default function PronunciationTrainer({ word, nextWord }: PronunciationTr
 
       <div className="mt-5 min-h-[420px]">
         {phase === 1 && (
-          <div className="grid gap-5 md:grid-cols-2">
-            <div>
-              <div className="mb-2 inline-flex rounded-full bg-slate-100 p-1 text-xs font-semibold">
-                <button
-                  type="button"
-                  onClick={() => setMouthMode("english")}
-                  className={`rounded-full px-3 py-1.5 ${mouthMode === "english" ? "bg-white text-emerald-700 shadow" : "text-slate-600"}`}
-                >
-                  ✅ Inglés correcto
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setMouthMode("spanish")}
-                  className={`rounded-full px-3 py-1.5 ${mouthMode === "spanish" ? "bg-white text-rose-700 shadow" : "text-slate-600"}`}
-                >
-                  ❌ Hábito del español
-                </button>
-              </div>
-              <MouthAnatomySVG
-                phonemeType={word.phonemeType}
-                word={word.word}
-                mode={mouthMode}
-                className="mx-auto block max-h-64 w-full max-w-sm rounded-2xl bg-slate-50 sm:max-h-80"
-              />
-            </div>
-            <div className="flex flex-col gap-4">
-              <p className="text-base leading-relaxed text-slate-800">
-                {mouthMode === "english"
-                  ? word.anatomicalTipEs
-                  : "En español, la «T» y la «D» se hacen apoyando la lengua detrás de los dientes y cortando el aire. Ese golpe es lo que hace que «thirty» suene a «dirty». Compara ambas posiciones."}
-              </p>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => play(1)}
-                  disabled={playing !== null}
-                  className="flex items-center justify-center gap-2 rounded-2xl bg-indigo-600 px-4 py-4 font-semibold text-white shadow-md transition hover:bg-indigo-700 disabled:opacity-70"
-                >
-                  {playing === "normal" ? <Loader2 className="size-5 animate-spin" /> : <Volume2 className="size-5" />} Normal 1.0x
-                </button>
-                <button
-                  type="button"
-                  onClick={() => play(0.6)}
-                  disabled={playing !== null}
-                  className="flex items-center justify-center gap-2 rounded-2xl border-2 border-indigo-200 bg-white px-4 py-4 font-semibold text-indigo-700 transition hover:border-indigo-400 disabled:opacity-70"
-                >
-                  {playing === "slow" ? <Loader2 className="size-5 animate-spin" /> : <Snail className="size-5" />} Lento 0.6x
-                </button>
-              </div>
-              <p className="text-center font-ipa text-2xl text-indigo-700">{word.ipa}</p>
-              <button
-                type="button"
-                onClick={() => setPhase(2)}
-                className="mt-auto inline-flex items-center justify-center gap-2 rounded-full bg-slate-900 px-5 py-3 font-semibold text-white hover:bg-slate-800"
-              >
-                Probar mi pronunciación <ArrowRight className="size-4" />
-              </button>
-            </div>
-          </div>
+          <MouthCoach word={word} focus={coachFocus} practiced={Boolean(wordProgress?.guidePracticed)}
+            onPracticed={() => recordGuidePractice(word.slug)} onTryWord={() => setPhase(2)} />
         )}
 
         {phase === 2 && (
           <div className="flex flex-col gap-4">
             <WaveformCanvas
               reference={word.referenceWaveform}
+              referenceIsIllustrative={!word.audioNormalUrl}
               chunks={word.chunks}
               word={word.word}
               userWaveform={result?.acoustic.userWaveform ?? null}
@@ -276,6 +215,21 @@ export default function PronunciationTrainer({ word, nextWord }: PronunciationTr
             {error && <p className="rounded-xl bg-rose-50 p-3 text-sm text-rose-700">{error}</p>}
             {result && status === "done" && <FeedbackBadge result={result} word={word.word} />}
 
+            {result && !result.passed && status === "done" && (
+              <div className="rounded-xl border border-indigo-100 bg-indigo-50 p-3 text-sm">
+                {getCoachFocus(result) ? (
+                  <>
+                    <p className="text-indigo-950">{difficultAttempts >= 2
+                      ? "No necesitas repetir sin saber qué cambiar. Prueba un movimiento sin puntos."
+                      : "Puedes practicar el movimiento antes de volver a grabar."}</p>
+                    <button type="button" onClick={() => { setCoachFocus(getCoachFocus(result)); setPhase(1); }}
+                      className="mt-2 rounded-full bg-indigo-600 px-4 py-2 font-semibold text-white">
+                      Practicar el movimiento
+                    </button>
+                  </>
+                ) : <p className="text-slate-700">Primero revisa el permiso y la distancia del micrófono, o prueba en un lugar tranquilo. No haber captado voz no significa que hayas pronunciado mal.</p>}
+              </div>
+            )}
             {result && status === "done" && (
               <div className="flex flex-wrap items-center justify-center gap-2">
                 <button
@@ -335,6 +289,14 @@ export default function PronunciationTrainer({ word, nextWord }: PronunciationTr
 
         {phase === 4 && <ShadowingChallenge word={word} />}
       </div>
+      {!recording && !busy && (
+        <div className="mt-5 border-t border-slate-100 pt-4 text-sm text-slate-600">
+          <p>Puedes avanzar a tu ritmo, sin una puntuación mínima.</p>
+          <Link href={nextWord ? wordPath(nextWord.slug) : "/"} className="mt-2 inline-flex items-center gap-2 font-semibold text-indigo-700">
+            {nextWord ? `Explorar la siguiente palabra: ${nextWord.word}` : "Volver a las palabras del reto"} <ArrowRight className="size-4" />
+          </Link>
+        </div>
+      )}
     </section>
   );
 }

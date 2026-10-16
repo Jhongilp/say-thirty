@@ -8,6 +8,7 @@ export interface WordProgress {
   attempts: number;
   chunksDone: string[];
   lastPracticedAt: string;
+  guidePracticed?: boolean;
 }
 
 export interface ProgressState {
@@ -49,6 +50,7 @@ export function parseProgress(raw: string | null): ProgressState {
         attempts: Number.isFinite(w.attempts) ? w.attempts : 0,
         chunksDone: Array.isArray(w.chunksDone) ? w.chunksDone.filter((c) => typeof c === "string") : [],
         lastPracticedAt: typeof w.lastPracticedAt === "string" ? w.lastPracticedAt : "",
+        ...(w.guidePracticed === true ? { guidePracticed: true } : {}),
       };
     }
     const streak = data.streak;
@@ -108,6 +110,15 @@ export function recordChunk(state: ProgressState, slug: string, chunkLabel: stri
   return {
     ...state,
     words: { ...state.words, [slug]: { ...prev, chunksDone: [...prev.chunksDone, chunkLabel], lastPracticedAt: today } },
+    streak: bumpStreak(state.streak, today),
+  };
+}
+
+export function recordGuidePractice(state: ProgressState, slug: string, today: string): ProgressState {
+  const prev = wordOrEmpty(state, slug);
+  return {
+    ...state,
+    words: { ...state.words, [slug]: { ...prev, guidePracticed: true, lastPracticedAt: today } },
     streak: bumpStreak(state.streak, today),
   };
 }

@@ -6,8 +6,9 @@ import type { SyllableChunk } from "@/lib/types";
 export interface WaveformCanvasProps {
   /** 48 normalized native amplitude peaks (pre-computed by the seeder). */
   reference: number[];
-  /** Phonetic chunks / syllables of the target word shown over their corresponding waveform region. */
+  /** Learning chunks only; no measured timestamps are available for their boundaries. */
   chunks?: SyllableChunk[];
+  referenceIsIllustrative?: boolean;
   /** Display word for the instructional caption. */
   word?: string;
   /** Final, trimmed user envelope after an attempt. */
@@ -24,14 +25,12 @@ const NATIVE_COLOR = "rgba(79, 70, 229, 0.85)";
 const USER_COLOR = "rgba(16, 185, 129, 0.9)";
 const LIVE_COLOR = "rgba(244, 63, 94, 0.9)";
 const PLAYHEAD_COLOR = "rgba(244, 63, 94, 0.45)";
-const DIVIDER_COLOR = "rgba(99, 102, 241, 0.25)";
 
 function draw(
   canvas: HTMLCanvasElement,
   reference: number[],
   user: ArrayLike<number> | null,
   userColor: string,
-  chunkCount: number,
   activeBar = -1,
 ) {
   const dpr = window.devicePixelRatio || 1;
@@ -49,22 +48,6 @@ function draw(
   const bars = Math.max(reference.length, user?.length ?? 0, 1);
   const slot = width / bars;
   const barWidth = Math.max(1.5, slot * 0.62);
-
-  // Subtle vertical dividers between syllable chunks so each "mountain" is clearly scoped.
-  if (chunkCount > 1) {
-    ctx.save();
-    ctx.strokeStyle = DIVIDER_COLOR;
-    ctx.lineWidth = 1;
-    ctx.setLineDash([4, 4]);
-    for (let c = 1; c < chunkCount; c++) {
-      const x = Math.round((c * width) / chunkCount) + 0.5;
-      ctx.beginPath();
-      ctx.moveTo(x, 6);
-      ctx.lineTo(x, height - 6);
-      ctx.stroke();
-    }
-    ctx.restore();
-  }
 
   ctx.strokeStyle = "rgba(148, 163, 184, 0.5)";
   ctx.lineWidth = 1;
@@ -113,6 +96,7 @@ function draw(
 export default function WaveformCanvas({
   reference,
   chunks,
+  referenceIsIllustrative = false,
   word,
   userWaveform,
   liveLevelsRef,
@@ -121,7 +105,6 @@ export default function WaveformCanvas({
   className,
 }: WaveformCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const chunkCount = chunks?.length ?? 0;
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -130,28 +113,28 @@ export default function WaveformCanvas({
     if (recording && liveLevelsRef) {
       let raf = 0;
       const loop = () => {
-        draw(canvas, reference, liveLevelsRef.current, LIVE_COLOR, chunkCount, activeBarRef?.current ?? -1);
+        draw(canvas, reference, liveLevelsRef.current, LIVE_COLOR, activeBarRef?.current ?? -1);
         raf = requestAnimationFrame(loop);
       };
       raf = requestAnimationFrame(loop);
       return () => cancelAnimationFrame(raf);
     }
 
-    const render = () => draw(canvas, reference, userWaveform ?? null, USER_COLOR, chunkCount, -1);
+    const render = () => draw(canvas, reference, userWaveform ?? null, USER_COLOR, -1);
     render();
     const observer = new ResizeObserver(render);
     observer.observe(canvas);
     return () => observer.disconnect();
-  }, [reference, userWaveform, liveLevelsRef, activeBarRef, recording, chunkCount]);
+  }, [reference, userWaveform, liveLevelsRef, activeBarRef, recording]);
 
   return (
     <div className={className}>
       {chunks && chunks.length > 0 && (
         <div
-          className="mb-1.5 grid gap-1 text-center"
-          style={{ gridTemplateColumns: `repeat(${chunks.length}, minmax(0, 1fr))` }}
-          aria-label="Bloques fonéticos de la palabra en la onda de voz"
+          className="mb-2 flex flex-wrap items-center gap-2"
+          aria-label="Bloques para practicar, no marcas de tiempo"
         >
+          <span className="text-xs text-slate-500">Practica por partes:</span>
           {chunks.map((chunk, i) => (
             <div
               key={chunk.label}
@@ -169,20 +152,25 @@ export default function WaveformCanvas({
         ref={canvasRef}
         className="h-36 w-full rounded-xl bg-slate-50 sm:h-40"
         role="img"
-        aria-label="Comparación de la onda de voz nativa (arriba) con tu grabación (abajo)"
+        aria-label="Intensidad relativa del sonido: referencia arriba y tu intento abajo. Los picos no marcan sílabas exactas."
       />
       <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
         <span className="flex items-center gap-1.5">
-          <span className="inline-block size-2.5 rounded-full bg-indigo-600" /> Nativo (arriba)
+          <span className="inline-block size-2.5 rounded-full bg-indigo-600" /> {referenceIsIllustrative ? "Guía ilustrativa (arriba)" : "Referencia (arriba)"}
         </span>
         <span className="text-center text-[11px] text-slate-400">
-          {word ? `Toda la gráfica = 1 sola vez «${word}» (cada montaña es una sílaba/bloque)` : "Cada montaña representa un bloque de la palabra"}
+          {word ? `Di «${word}» una sola vez` : "Di la palabra una sola vez"}
         </span>
         <span className="flex items-center gap-1.5">
           <span className={`inline-block size-2.5 rounded-full ${recording ? "bg-rose-500" : "bg-emerald-500"}`} />
           {recording ? "Grabando tu voz…" : "Tu voz (abajo)"}
         </span>
       </div>
+      <p className="mt-2 text-xs leading-relaxed text-slate-500">
+        La altura indica intensidad relativa, no precisión. Los picos no corresponden necesariamente a sílabas.
+        Durante la grabación, el avance es aproximado; al terminar, tu intento se ajusta al ancho de la gráfica.
+        {referenceIsIllustrative && " La guía superior es un dibujo orientativo, no la onda medida del audio que escuchas."}
+      </p>
     </div>
   );
 }

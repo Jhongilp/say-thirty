@@ -9,6 +9,7 @@ import {
   parseProgress,
   recordAttempt as applyAttempt,
   recordChunk as applyChunk,
+  recordGuidePractice as applyGuidePractice,
   type ProgressState,
 } from "@/lib/progress";
 
@@ -71,6 +72,9 @@ export function useProgressStore() {
   }, []);
 
   const reset = useCallback(() => write(() => emptyProgress()), []);
+  const recordGuidePractice = useCallback((slug: string) => {
+    write((s) => applyGuidePractice(s, slug, localDateKey()));
+  }, []);
 
   return {
     progress,
@@ -78,6 +82,7 @@ export function useProgressStore() {
     isMastered: (slug: string) => Boolean(progress.words[slug]?.mastered),
     recordAttempt,
     recordChunk,
+    recordGuidePractice,
     reset,
   };
 }

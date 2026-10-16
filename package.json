@@ -8,7 +8,7 @@
     "start": "npx serve out",
     "lint": "eslint",
     "typecheck": "next typegen && tsc --noEmit",
-    "test": "node --import tsx --test tests/evaluation.test.ts tests/audio-analysis.test.ts tests/progress.test.ts tests/fallback-words.test.ts tests/shadowing.test.ts",
+    "test": "node --import tsx --test tests/evaluation.test.ts tests/audio-analysis.test.ts tests/progress.test.ts tests/fallback-words.test.ts tests/shadowing.test.ts tests/mouth-coach.test.ts",
     "seed": "tsx scripts/seed-words.ts",
     "deploy": "next build && firebase deploy --only hosting"
   },

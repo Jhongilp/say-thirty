@@ -36,7 +36,7 @@ app/                       Routes (all statically prerendered)
   pronunciar/[word]/       SSG word pages: generateStaticParams + generateMetadata + JSON-LD
   privacidad|terminos|cookies|contacto/   AdSense-compliance pages
   sitemap.ts, robots.ts, ads.txt/route.ts
-components/trainer/        PronunciationTrainer (4 phases), MouthAnatomySVG, WaveformCanvas,
+components/trainer/        PronunciationTrainer (4 phases), MouthCoach, MouthAnatomySVG, WaveformCanvas,
                            SyllableChunker, ShadowingChallenge, FeedbackBadge
 components/seo/            WordSeoArticle (below the fold), JsonLdSchema (FAQPage + LearningResource)
 components/ads/            SafeAdSlot (gated, CLS-safe), GatedScripts (AdSense + GA4 loader)
@@ -72,6 +72,24 @@ tests/                     Unit tests
 Detector thresholds live in `ACOUSTIC_CONFIG` in [lib/evaluation.ts](./lib/evaluation.ts). They were validated
 with synthetic signals (unit tests plus an in-browser synthetic microphone). Tune them with real recordings before
 launch.
+
+### Guided mouth practice
+
+Phase 1 offers synchronized front/mirror and side/cutaway SVG views: tongue placement, gentle airflow,
+voicing (/θ/ versus /ð/), then joining into the word. Play, pause, restart and a manual slider share one
+animation clock. Reduced-motion preferences disable playback but retain manual exploration. The drawings
+are teaching schematics, not a complete phoneme model or an animation synchronized to reference audio.
+TH, T/D closure and F lip-to-teeth comparisons show different contact points, not a single "Spanish accent."
+
+Four optional self-checks record **guide practiced** in local progress and the roadmap. This is unscored,
+requires no microphone or camera, and does not change attempts, best score or mastery. Completion counts
+toward the practice streak. Learners can try recording or advance without completing the guide or reaching
+80 points. Difficult recordings offer focused movement practice; missing speech prompts microphone checks
+instead. Recognition celebrations and score-based mastery remain separate.
+
+The waveform shows relative intensity, not pronunciation accuracy or syllable boundaries. Chunk labels
+are practice blocks, not timed regions. Live progress is approximate; the completed attempt is normalized
+to the graph width. Offline reference waveforms are explicitly labeled illustrative, not measured from TTS.
 
 ### Anti-bot and AdSense protection
 

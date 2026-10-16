@@ -12,8 +12,8 @@ export const metadata: Metadata = {
 };
 
 const STEPS = [
-  { icon: Ear, title: "1. Diagnóstico", text: "Mira en un corte anatómico dónde va tu lengua y escucha el audio nativo normal y a cámara lenta." },
-  { icon: Mic, title: "2. Espejo acústico", text: "Graba tu voz: comparamos tu onda con la nativa y detectamos si suena a «dirty» en vez de «thirty»." },
+  { icon: Ear, title: "1. Guía de boca", text: "Explora la lengua, los dientes y el aire en dos vistas. Practica cuatro movimientos sin puntos y escucha la palabra." },
+  { icon: Mic, title: "2. Espejo acústico", text: "Graba tu voz y recibe pistas orientativas sobre el sonido. Las ondas muestran intensidad, no la posición de tu lengua." },
   { icon: Puzzle, title: "3. Sílabas", text: "Divide las palabras difíciles en bloques y practica cada uno hasta desbloquear la insignia." },
   { icon: Repeat, title: "4. Contexto real", text: "Repite una frase completa a velocidad natural para fijar la memoria muscular." },
 ];
